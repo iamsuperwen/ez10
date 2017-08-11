@@ -313,6 +313,6 @@ if __name__ == '__main__':
 
     rospy.init_node('iothub_node')
 
-    #push2iothub(1)  #push_rate=10hz
+    push2iothub(10)  #push_rate=10hz
 
-    rospy.spin()
+    #rospy.spin()
