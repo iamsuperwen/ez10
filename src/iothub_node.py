@@ -9,7 +9,7 @@
 
 * Change the absolute path! <line 22>
 
-* RPY & Vel haven't done yet.  --20170811 tsai
+* RPY haven't done yet.  --20170816 tsai
 """
 
 import rospy
@@ -64,17 +64,17 @@ PROTOCOL = IoTHubTransportProvider.MQTT
 # String containing Hostname, Device Id & Device Key in the format:
 CONNECTION_STRING = "HostName=ez10S1.azure-devices.net;DeviceId=PC0;SharedAccessKey=uC98sguRyI1ytjvMxDHqdVjHG2F2rOCdcLNyREjWfts="
 
-MSG_TXT = "{\"deviceId\": \"PC0\",\"datetime\": \"%s\",\"x\": %.8f,\"y\": %.8f,\"z\": %.8f,\"yaw\": %.8f,\"gpsx\": %.8f,\"gpsy\": %.8f,\"temp\": %.4f,\"humid\": %.4f}" ##JSON Type!?
+MSG_TXT = "{\"deviceId\": \"PC0\",\"datetime\": \"%s\",\"x\": %.8f,\"y\": %.8f,\"z\": %.8f,\"lati\": %.8f,\"longi\": %.8f,\"velx\": %.8f,\"vely\": %.8f,\"temp\": %.4f,\"humid\": %.4f}" ##JSON Type!?
 
 # some embedded platforms need certificate information
 
 # global variables, saving sensor data
 # === IMU ===
 imuMsg = Imu()
-rpyMsg = DiagnosticArray()
+#rpyMsg = DiagnosticArray()
 # === GPS ===
 gpsMsg = NavSatFix()
-
+velMsg = TwistStamped()
 # === TEMP & HUMID ===
 tempMsg = Float32()
 humidMsg = Float32()
@@ -202,19 +202,29 @@ def push2iothub(push_rate):
 
 
         rate = rospy.Rate(push_rate)
+        
+        last_dt = "2016"
 
         while True:
             global imuMsg, gpsMsg
             date_f = datetime.datetime.fromtimestamp(imuMsg.header.stamp.secs).strftime("%Y-%m-%d")
             time_f = datetime.datetime.fromtimestamp(imuMsg.header.stamp.secs).strftime("%X.") + str(int(float(imuMsg.header.stamp.nsecs)/(10**6)))
 
+            
             datetime_f = date_f + "T" + time_f + "Z"
+            
+            if datetime_f <= last_dt:   
+                # refresh only when new data comes; 
+                # won't send when:  1. not receiving data;  2. don't have new data              
+                continue
 
-            GPSx = gpsMsg.latitude
-            GPSy = gpsMsg.longitude
+            last_dt = datetime_f
+
+            #GPSx = gpsMsg.latitude
+            #GPSy = gpsMsg.longitude
             #GPSz = gpsMsg.altitude
 
-            IMUyaw = imuMsg.header.stamp.nsecs
+            #IMUyaw = imuMsg.header.stamp.nsecs
 
 
             msg_txt_formatted = MSG_TXT % (
@@ -222,9 +232,11 @@ def push2iothub(push_rate):
                 imuMsg.linear_acceleration.x,
                 imuMsg.linear_acceleration.y,
                 imuMsg.linear_acceleration.z,
-                IMUyaw,
-                GPSx,
-                GPSy,
+                #IMUyaw,
+                gpsMsg.latitude,
+                gpsMsg.longitude,
+                velMsg.twist.linear.x,
+                velMsg.twist.linear.y,
                 tempMsg.data,
                 humidMsg.data)
                     
@@ -261,9 +273,9 @@ def get_Imu(data):
     global imuMsg
     imuMsg = data
 
-def get_RPY(data):  ##NOT YET
-    global rpyMsg
-    rpyMsg = data
+#def get_RPY(data):  ##NOT YET
+#    global rpyMsg
+#    rpyMsg = data
 
     #print(len(rpyMsg.status.pop()))
 
@@ -271,11 +283,9 @@ def get_Gps(data):
     global gpsMsg
     gpsMsg = data
 
-def get_Vel(data):  ##NOT YET
+def get_Vel(data):
     global velMsg
     velMsg = data
-    
-    #print(str(velMsg))
 
 def get_Temp(data):
     global tempMsg
@@ -301,7 +311,7 @@ if __name__ == '__main__':
     
     # === IMU ===
     rospy.Subscriber("imu", Imu, get_Imu)
-    rospy.Subscriber("diagnostics", DiagnosticArray, get_RPY)
+    #rospy.Subscriber("diagnostics", DiagnosticArray, get_RPY)
     
     # === GPS ===
     rospy.Subscriber("fix", NavSatFix, get_Gps) 
@@ -312,7 +322,7 @@ if __name__ == '__main__':
     rospy.Subscriber("humidity", Float32, get_Humid)
 
     rospy.init_node('iothub_node')
-
+    
     push2iothub(10)  #push_rate=10hz
 
     #rospy.spin()
